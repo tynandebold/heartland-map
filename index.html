@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+
+  <title>Journey Through the Heartland</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="bxslider.min.css">
+  <style>
+
+  body {
+    max-width: 1500px;
+    margin: 0 1%;
+  }
+
+  #title-wrapper {
+    font-family: garamond, serif;
+    margin: 0 auto;
+    max-width: 600px;
+    text-align: center;
+  }
+
+  h1 {
+    margin-bottom: 15px;
+  }
+
+  h2 {
+    font-weight: 400;
+    margin-top: 0;
+  }
+
+  #viz-wrapper {
+    display: flex;
+    justify-content: space-between;
+    margin: 0 auto;
+    max-width: 1450px;
+    padding: 0 10px;
+  }
+
+  /* map/map item styles */
+  #map {
+    display: none;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+  }
+
+  @media (min-width: 740px) {
+    #map {
+      display: block;
+      width: 60%;
+    }
+  }
+
+  @media (min-width: 992px) {
+    #map {
+      display: block;
+      width: 65%;
+    }
+  }
+
+  .svg-elem {
+    height: 100%;
+    width: 100%;
+  }
+
+  .location {
+    font-weight: bold;
+    line-height: 19px;
+  }
+
+  .land {
+    fill: #f2efe9;
+  }
+
+  .state-boundary {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 1.5;
+  }
+
+  .city {
+    stroke: #fff;
+    stroke-width: 1;
+    fill: #fff;
+    transition: all .3s ease-in;
+  }
+
+  .city[data-year="2015"] {
+    fill: #bbb;
+  }
+
+  .city[data-year="2016"] {
+    fill: #ef9300;
+  }
+
+  .city:hover {
+    cursor: pointer;
+  }
+
+  .city.active {
+    stroke-width: 2;
+  }
+
+  .route-line {
+    fill: none;
+    stroke-width: 2;
+    stroke: #225378;
+  }
+
+  .route-line[data-year="2016"] {
+    stroke: #ef9300;
+  }
+
+  .route-line[data-year="2015"] {
+    stroke: #bbb;
+  }
+
+  /* carousel/bx-slider styles */
+  .carousel-wrapper {
+    font-family: garamond, serif;
+    height: 100%;
+    margin-top: 30px;
+    vertical-align: top;
+    width: 100%;
+  }
+
+  @media (min-width: 740px) {
+    .carousel-wrapper {
+      width: 35%;
+    }
+  }
+
+  #bx-slider {
+    height: 100%;
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+  }
+
+  .bx-wrapper {
+    border: none;
+    box-shadow: none;
+    margin: 0 auto;
+    padding-bottom: 50px;
+    width: 550px;
+  }
+
+  .bx-viewport {
+    overflow: visible !important;
+  }
+
+  .bx-wrapper img {
+    width: 85%;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .caption-wrapper {
+    margin: 5px auto;
+    width: 85%;
+  }
+  .caption-wrapper > span {
+    display: block;
+  }
+
+  </style>
+</head>
+<body>
+
+  <div id="title-wrapper">
+    <h1>Journey Through the Heartland</h1>
+    <h2>Follow photographer Matt Black’s 2015 and 2016 routes as he explores and documents America’s impoverished communities on <a href="https://www.instagram.com/mattblack_blackmatt/" target="_blank">Instagram</a>.</h2>
+  </div>
+
+  <div id="viz-wrapper">
+    <div id="map"></div>
+
+    <div class="carousel-wrapper">
+      <ul id="bx-slider"></ul>
+    </div>
+  </div>
+
+  <script src="_libs/jquery.min.js"></script>
+  <script src="_libs/d3.min.js" charset="utf-8"></script>
+  <script src="_libs/queue.min.js"></script>
+  <script src="_libs/topojson.js"></script>
+  <script src="_libs/bxslider.min.js"></script>
+  <script>
+
+  // globals
+  var slider;
+  var scaleMultiplier;
+  var heightDivisor;
+  var width;
+  var height;
+  var windowWidth = $(window).width();
+
+  if (windowWidth > 1375) {
+    scaleMultiplier = 1;
+    heightDivisor = 2;
+    width = 925;
+    height = 580;
+  } else if (windowWidth < 1376 && windowWidth > 1150) {
+    scaleMultiplier = 0.85;
+    heightDivisor = 2;
+    width = 800;
+    height = 580;
+  } else if (windowWidth < 1151 && windowWidth > 992) {
+    scaleMultiplier = 0.7;
+    heightDivisor = 2;
+    width = 650;
+    height = 450;
+  } else if (windowWidth < 992) {
+    scaleMultiplier = 0.5;
+    heightDivisor = 1.75;
+    width = 450;
+    height = 350;
+  }
+
+  // create svg
+  var svg = d3.select("#map").append("svg")
+    .attr("class", "svg-elem")
+    .attr("viewbox", "100 100 100 100")
+    .style("height", height)
+    .style("width", width);
+
+  var projection = d3.geo.albers()
+    .scale(1200 * scaleMultiplier)
+    .translate([width / 2, height / heightDivisor]);
+
+  var path = d3.geo.path()
+    .projection(projection);
+
+  queue()
+    .defer(d3.json, "us.json")
+    .defer(d3.csv, "cities.csv")
+    .await(ready);
+
+  function ready(error, states, cities) {
+    if (error) throw error;
+
+    // change strings to nums and add projection values
+    cities.forEach(function(city){
+      city.latitude = +city.latitude;
+      city.longitude = +city.longitude;
+      city.position = projection([
+        city.longitude, city.latitude
+      ]);
+    });
+
+    // draw the map
+    svg.insert("path", ".graticule")
+      .datum(topojson.feature(states, states.objects.land))
+      .attr("class", "land")
+      .attr("d", path);
+
+    svg.insert("path", ".graticule")
+      .datum(topojson.mesh(states, states.objects.states, function(a, b) { return a = b; }))
+      .attr("class", "state-boundary")
+      .attr("d", path);
+
+
+    // separate 2015/2016 data
+    var yearlyData = {};
+    cities.forEach(function(city){
+      if(!yearlyData[city.year]){
+        yearlyData[city.year] = [];
+      }
+      yearlyData[city.year].push(city);
+    });
+
+    drawLines(yearlyData);
+    plotCities(cities);
+    buildCarousel(cities);
+  }
+
+  function drawLines(yearlyData){
+    Object.keys(yearlyData).forEach(function(key) {
+      var year = yearlyData[key];
+
+      var lineFn = d3.svg.line()
+      .x(function (year) { return year.position[0];})
+      .y(function (year) { return year.position[1];})
+      .interpolate("linear");
+
+      svg.append("path")
+      .data(year)
+      .attr("d", lineFn(year))
+      .attr("data-year", function(city){
+        return city.year;
+      })
+      .attr("class", "route-line");
+    });
+  }
+
+  function plotCities(cities){
+    var circles = svg.selectAll("circle")
+      .data(cities)
+      .enter().append("circle")
+      .attr("class", "city")
+      .attr("data-id", function(city){
+        return city.id;
+      })
+      .attr("data-year", function(city){
+        return city.year;
+      })
+      .attr("cx", function(city){
+        return city.position[0];
+      })
+      .attr("cy", function(city){
+        return city.position[1];
+      })
+      .attr("r", 5.5)
+      .on("click", selectCity);
+
+    // add unique state to first city
+    $('.city[data-id=0][data-year=2016]').addClass('active').attr("r", 9.075);
+  }
+
+  function selectCity(city){
+    var cityId = city.id;
+    var year   = $(this).data("year");
+
+    $('.city').removeClass('active').attr("r", 5);
+    $('.city[data-id='+ cityId +']').addClass('active').attr("r", 9.075);
+
+    slider.goToSlide(cityId);
+  }
+
+  function buildCarousel(cities){
+    var html = '';
+
+    // sort city data by year, then id
+    cities.sort(function(a, b){
+      var n = b.year - a.year;
+      if (n !== 0) {
+        return n;
+      }
+      return a.id - b.id;
+    });
+
+    cities.forEach(function(city, i){
+      html += '<li>';
+      html += i ? '<img data-src="imgs/' + city.imgUrl + '"/>' : '<img src="imgs/' + city.imgUrl + '"/>';
+      html += '<div class="caption-wrapper">' +
+                  '<span class="location">' + city.city + '</span>' +
+                  '<span class="caption">' + city.imgCaption + '</span>' +
+                '</div>' +
+              '</li>';
+    });
+
+    $('#bx-slider').append(html);
+
+    slider = $('#bx-slider').bxSlider({
+      captions: false,
+      mode: 'fade',
+      onSlideNext: changeActiveCity,
+      onSlidePrev: changeActiveCity,
+      onSlideBefore: loadImage,
+      pager: false,
+      speed: 300
+    });
+  }
+
+  function loadImage($slideElement){
+    var $image = $slideElement.find('img');
+    var src = $image.data().src;
+    $image.attr('src', src);
+  }
+
+  function changeActiveCity($slideElement, oldIndex, newIndex){
+    selectCity({id: newIndex});
+  }
+
+  </script>
+</body>
