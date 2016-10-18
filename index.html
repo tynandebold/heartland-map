@@ -311,7 +311,9 @@
         return city.position[1];
       })
       .attr("r", 5.5)
-      .on("click", selectCity);
+      .on("click", selectCity)
+      .on("mouseover", cityMouseOver)
+      .on("mouseout", cityMouseOut);
 
     // add unique state to first city
     $('.city[data-id=0][data-year=2016]').addClass('active').attr("r", 9.075);
@@ -325,6 +327,19 @@
     $('.city[data-id='+ cityId +']').addClass('active').attr("r", 9.075);
 
     slider.goToSlide(cityId);
+  }
+
+  function cityMouseOver(){
+    var cityId = $(this).data('id');
+    $('.city[data-id='+ cityId +']').attr("r", 9.075);
+  }
+
+  function cityMouseOut(){
+    var cityId = $(this).data('id');
+    var active = $('.city[data-id='+ cityId +']').hasClass('active');
+    if (!active){
+      $('.city[data-id='+ cityId +']').attr("r", 5);
+    }
   }
 
   function buildCarousel(cities){
